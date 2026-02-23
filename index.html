@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>予約システム</title>
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.11/index.global.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.11/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.11/locales/ja.global.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Oswald:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#232635;--border:#2e3248;
+  --accent:#4f8ef7;--text:#e8eaf0;--text-muted:#8890aa;
+  --success:#3dd68c;--warning:#f5a623;--danger:#f26c6c;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+/* PASSWORD */
+#pw-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:32px;}
+.pw-logo{font-family:'Oswald',sans-serif;font-size:28px;font-weight:600;color:var(--accent);letter-spacing:3px;display:flex;align-items:center;gap:12px;}
+.pw-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:36px 40px;width:320px;text-align:center;}
+.pw-title{font-size:14px;color:var(--text-muted);margin-bottom:24px;}
+.pw-dots{display:flex;justify-content:center;gap:14px;margin-bottom:28px;}
+.pw-dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);background:transparent;transition:all 0.2s;}
+.pw-dot.filled{background:var(--accent);border-color:var(--accent);box-shadow:0 0 12px rgba(79,142,247,0.5);}
+.pw-dot.error{background:var(--danger);border-color:var(--danger);animation:shake 0.4s ease;}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+.pw-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.pw-key{height:52px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:20px;font-family:'Oswald',sans-serif;font-weight:600;cursor:pointer;transition:all 0.1s;display:flex;align-items:center;justify-content:center;user-select:none;}
+.pw-key:active{background:var(--accent);border-color:var(--accent);transform:scale(0.94);}
+.pw-key.del{font-size:16px;color:var(--text-muted);}
+.pw-error-msg{margin-top:16px;font-size:12px;color:var(--danger);min-height:18px;}
+
+/* HEADER */
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;height:54px;display:flex;align-items:center;gap:16px;flex-shrink:0;z-index:100;}
+.header-logo{font-family:'Oswald',sans-serif;font-size:18px;font-weight:600;letter-spacing:2px;color:var(--accent);display:flex;align-items:center;gap:8px;white-space:nowrap;}
+.resource-legend{display:flex;gap:8px;flex-wrap:wrap;flex:1;}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-muted);cursor:pointer;padding:3px 10px;border-radius:20px;border:1px solid var(--border);transition:all 0.2s;user-select:none;white-space:nowrap;}
+.legend-item.active{color:var(--text);border-color:var(--dot-color);background:color-mix(in srgb,var(--dot-color) 15%,transparent);}
+.legend-dot{width:7px;height:7px;border-radius:50%;background:var(--dot-color);flex-shrink:0;}
+.header-right{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+
+/* LAYOUT */
+.main-layout{display:flex;flex:1;overflow:hidden;}
+.sidebar{width:252px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:14px;overflow-y:auto;display:flex;flex-direction:column;gap:16px;}
+.mini-cal-wrap{background:var(--surface2);border-radius:10px;padding:10px;border:1px solid var(--border);}
+.section-label{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px;}
+.upcoming-list{display:flex;flex-direction:column;gap:7px;}
+.upcoming-item{background:var(--surface2);border-radius:8px;padding:9px 11px;border:1px solid var(--border);border-left:3px solid var(--item-color,var(--accent));cursor:pointer;transition:background 0.15s;}
+.upcoming-item:hover{background:var(--border);}
+.upcoming-title{font-size:12px;font-weight:500;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.upcoming-meta{font-size:11px;color:var(--text-muted);}
+.calendar-area{flex:1;overflow:hidden;padding:14px;display:flex;flex-direction:column;gap:10px;}
+.cal-toolbar{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.btn{padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-family:inherit;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+.btn:hover{background:var(--surface2);border-color:var(--accent);}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+.btn.primary:hover{background:#3a7ee6;}
+.btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.btn.danger{background:var(--danger);border-color:var(--danger);color:#fff;}
+.view-btns{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.view-btns .btn{border:none;border-radius:0;border-right:1px solid var(--border);padding:6px 12px;}
+.view-btns .btn:last-child{border-right:none;}
+.toolbar-title{font-family:'Oswald',sans-serif;font-size:20px;font-weight:600;flex:1;text-align:center;}
+#main-cal-wrap{flex:1;overflow:hidden;background:var(--surface);border-radius:12px;border:1px solid var(--border);padding:10px;}
+
+/* FULLCALENDAR */
+.fc{--fc-border-color:var(--border);--fc-today-bg-color:rgba(79,142,247,0.07);--fc-now-indicator-color:var(--accent);--fc-page-bg-color:transparent;--fc-neutral-bg-color:var(--surface2);color:var(--text)!important;height:100%!important;}
+.fc .fc-toolbar{display:none;}
+.fc .fc-col-header-cell{background:var(--surface2);}
+.fc .fc-col-header-cell-cushion{color:var(--text-muted)!important;font-size:12px;font-weight:500;}
+.fc .fc-timegrid-slot-label{color:var(--text-muted);font-size:11px;}
+.fc .fc-daygrid-day-number{color:var(--text-muted)!important;font-size:12px;}
+.fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-number{background:var(--accent);color:#fff!important;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;}
+.fc-timegrid-event{border-radius:6px!important;border:none!important;padding:2px 6px!important;}
+.fc-event-title{font-size:11px!important;font-weight:500!important;}
+.fc-event-time{font-size:10px!important;opacity:0.75;}
+.fc-highlight{background:rgba(79,142,247,0.2)!important;border:1px dashed var(--accent)!important;}
+.fc-license-message,a[href*="fullcalendar.io"]{display:none!important;}
+.ev-inner{display:flex;flex-direction:column;gap:1px;padding:2px 4px;overflow:hidden;height:100%;}
+.ev-time{font-size:10px;opacity:0.8;flex-shrink:0;}
+.ev-title{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;}
+.ev-name{font-size:10px;opacity:0.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ev-note{font-size:10px;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* MINI CAL */
+#mini-cal .fc-toolbar{display:flex!important;align-items:center;margin-bottom:6px;padding:0 2px;}
+#mini-cal .fc-toolbar-title{font-size:13px!important;font-weight:600;color:var(--text);}
+#mini-cal .fc-button{background:var(--surface2)!important;border:1px solid var(--border)!important;color:var(--text-muted)!important;font-size:11px!important;padding:2px 7px!important;border-radius:6px!important;box-shadow:none!important;}
+#mini-cal .fc-button:hover{background:var(--border)!important;color:var(--text)!important;}
+#mini-cal .fc-button:focus{outline:none!important;box-shadow:none!important;}
+#mini-cal .fc-day.mini-selected .fc-daygrid-day-frame{background:rgba(79,142,247,0.18);border-radius:4px;}
+#mini-cal .fc-day.mini-selected .fc-daygrid-day-number{color:var(--accent)!important;font-weight:700;}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.modal-overlay.open{opacity:1;pointer-events:all;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px;width:460px;max-width:92vw;max-height:92vh;overflow-y:auto;transform:translateY(20px);transition:transform 0.2s;}
+.modal-overlay.open .modal{transform:translateY(0);}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+.modal-title{font-family:'Oswald',sans-serif;font-size:17px;font-weight:600;color:var(--accent);}
+.modal-close{width:30px;height:30px;background:var(--surface2);border:1px solid var(--border);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:15px;transition:all 0.15s;}
+.modal-close:hover{background:var(--danger);border-color:var(--danger);color:#fff;}
+.form-group{margin-bottom:14px;}
+.form-label{display:block;font-size:11px;font-weight:500;color:var(--text-muted);margin-bottom:5px;letter-spacing:0.5px;}
+.req{color:var(--danger);margin-left:3px;}
+.form-control{width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;outline:none;transition:border-color 0.15s;}
+.form-control:focus{border-color:var(--accent);}
+.form-control option{background:var(--surface2);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;padding-top:14px;border-top:1px solid var(--border);}
+
+/* REPEAT */
+.repeat-section{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;}
+.repeat-toggle{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text);user-select:none;}
+.repeat-toggle input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:pointer;}
+.repeat-options{margin-top:12px;display:flex;flex-direction:column;gap:10px;}
+.repeat-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.repeat-lbl{font-size:11px;color:var(--text-muted);white-space:nowrap;min-width:52px;}
+.rp-select{background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px;font-family:inherit;outline:none;}
+.rp-select:focus{border-color:var(--accent);}
+.weekday-btns{display:flex;gap:5px;flex-wrap:wrap;}
+.weekday-btn{width:32px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-muted);font-size:11px;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;font-family:inherit;}
+.weekday-btn.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.repeat-info{font-size:11px;color:var(--text-muted);margin-top:4px;padding:6px 8px;background:rgba(79,142,247,0.07);border-radius:6px;}
+.repeat-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;background:rgba(79,142,247,0.15);border:1px solid rgba(79,142,247,0.4);color:var(--accent);border-radius:4px;padding:1px 6px;margin-left:5px;vertical-align:middle;}
+
+/* SCOPE DIALOG */
+.scope-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:2000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.scope-overlay.open{opacity:1;pointer-events:all;}
+.scope-dialog{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:340px;max-width:90vw;transform:translateY(16px);transition:transform 0.2s;}
+.scope-overlay.open .scope-dialog{transform:translateY(0);}
+.scope-title{font-family:'Oswald',sans-serif;font-size:15px;color:var(--accent);margin-bottom:16px;}
+.scope-option{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;border:1px solid var(--border);cursor:pointer;transition:all 0.15s;margin-bottom:8px;}
+.scope-option:hover{border-color:var(--accent);background:rgba(79,142,247,0.07);}
+.scope-option input[type=radio]{accent-color:var(--accent);margin-top:2px;flex-shrink:0;}
+.scope-option-label{font-size:13px;font-weight:500;}
+.scope-option-desc{font-size:11px;color:var(--text-muted);margin-top:2px;}
+.scope-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
+
+/* LOADING */
+.loading-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:5000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;}
+.loading-spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:13px;color:var(--text-muted);}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 18px;font-size:13px;z-index:3000;transition:transform 0.3s;white-space:nowrap;max-width:90vw;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+.toast.success{border-color:var(--success);color:var(--success);}
+.toast.error{border-color:var(--danger);color:var(--danger);}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+@media(max-width:768px){.sidebar{display:none;}.resource-legend{display:none;}}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-text" id="loading-text">読み込み中...</div>
+</div>
+
+<!-- PASSWORD -->
+<div id="pw-screen" style="display:none">
+  <div class="pw-logo">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    予約システム
+  </div>
+  <div class="pw-box">
+    <div class="pw-title">4桁のパスワードを入力してください</div>
+    <div class="pw-dots">
+      <div class="pw-dot" id="dot0"></div><div class="pw-dot" id="dot1"></div>
+      <div class="pw-dot" id="dot2"></div><div class="pw-dot" id="dot3"></div>
+    </div>
+    <div class="pw-keypad">
+      <div class="pw-key" onclick="pwKey('1')">1</div><div class="pw-key" onclick="pwKey('2')">2</div><div class="pw-key" onclick="pwKey('3')">3</div>
+      <div class="pw-key" onclick="pwKey('4')">4</div><div class="pw-key" onclick="pwKey('5')">5</div><div class="pw-key" onclick="pwKey('6')">6</div>
+      <div class="pw-key" onclick="pwKey('7')">7</div><div class="pw-key" onclick="pwKey('8')">8</div><div class="pw-key" onclick="pwKey('9')">9</div>
+      <div class="pw-key" style="visibility:hidden"></div><div class="pw-key" onclick="pwKey('0')">0</div><div class="pw-key del" onclick="pwDel()">⌫</div>
+    </div>
+    <div class="pw-error-msg" id="pw-error"></div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="header-logo">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    予約システム
+  </div>
+  <div class="resource-legend" id="resource-legend"></div>
+  <div class="header-right">
+    <button class="btn primary" onclick="openNewModal()">＋ 新規予約</button>
+  </div>
+</header>
+
+<!-- MAIN -->
+<div class="main-layout">
+  <div class="sidebar">
+    <div>
+      <div class="section-label">月間カレンダー</div>
+      <div class="mini-cal-wrap"><div id="mini-cal"></div></div>
+    </div>
+    <div>
+      <div class="section-label">直近の予約</div>
+      <div class="upcoming-list" id="upcoming-list"><div style="font-size:12px;color:var(--text-muted)">読み込み中...</div></div>
+    </div>
+  </div>
+  <div class="calendar-area">
+    <div class="cal-toolbar">
+      <button class="btn" onclick="mainCal.prev()">◀</button>
+      <button class="btn" onclick="mainCal.today()">今日</button>
+      <button class="btn" onclick="mainCal.next()">▶</button>
+      <div class="toolbar-title" id="toolbar-title"></div>
+      <div class="view-btns">
+        <button class="btn active" id="btn-day" onclick="changeView('resourceTimeGridDay')">日</button>
+        <button class="btn" id="btn-week" onclick="changeView('timeGridWeek')">週</button>
+        <button class="btn" id="btn-month" onclick="changeView('dayGridMonth')">月</button>
+      </div>
+      <button class="btn" onclick="openAlldayModal()" style="background:var(--surface2);border-color:var(--warning);color:var(--warning)">終日予約</button>
+    </div>
+    <div id="main-cal-wrap"><div id="main-cal" style="height:100%"></div></div>
+  </div>
+</div>
+
+<!-- RESERVATION MODAL -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">新規予約</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <input type="hidden" id="edit-id">
+    <input type="hidden" id="edit-repeat-group-id">
+    <input type="hidden" id="edit-repeat-index">
+    <div class="form-group">
+      <label class="form-label">件名・用途<span class="req">*</span></label>
+      <input class="form-control" id="f-title" placeholder="例：営業部定例会議">
+    </div>
+    <div class="form-group">
+      <label class="form-label">予約対象<span class="req">*</span></label>
+      <select class="form-control" id="f-resource"></select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">開始日時<span class="req">*</span></label>
+        <input class="form-control" id="f-start" type="datetime-local">
+      </div>
+      <div class="form-group">
+        <label class="form-label">終了日時<span class="req">*</span></label>
+        <input class="form-control" id="f-end" type="datetime-local">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">予約者名<span class="req">*</span></label>
+        <input class="form-control" id="f-name" placeholder="山田 太郎">
+      </div>
+      <div class="form-group">
+        <label class="form-label">連絡先</label>
+        <input class="form-control" id="f-contact" placeholder="内線・メール">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">備考</label>
+      <textarea class="form-control" id="f-note" rows="2" placeholder="参加人数、必要備品など"></textarea>
+    </div>
+    <div class="repeat-section" id="repeat-section">
+      <label class="repeat-toggle">
+        <input type="checkbox" id="repeat-enabled" onchange="onRepeatToggle()">
+        🔁 繰り返し予約にする
+      </label>
+      <div class="repeat-options" id="repeat-options" style="display:none">
+        <div class="repeat-row">
+          <span class="repeat-lbl">パターン</span>
+          <select class="rp-select" id="repeat-freq" onchange="onFreqChange()">
+            <option value="weekly">毎週（曜日指定）</option>
+            <option value="monthly">毎月（同日）</option>
+          </select>
+        </div>
+        <div class="repeat-row" id="weekday-row">
+          <span class="repeat-lbl">曜日</span>
+          <div class="weekday-btns">
+            <button type="button" class="weekday-btn" data-day="0" onclick="toggleWeekday(this)">日</button>
+            <button type="button" class="weekday-btn" data-day="1" onclick="toggleWeekday(this)">月</button>
+            <button type="button" class="weekday-btn" data-day="2" onclick="toggleWeekday(this)">火</button>
+            <button type="button" class="weekday-btn" data-day="3" onclick="toggleWeekday(this)">水</button>
+            <button type="button" class="weekday-btn" data-day="4" onclick="toggleWeekday(this)">木</button>
+            <button type="button" class="weekday-btn" data-day="5" onclick="toggleWeekday(this)">金</button>
+            <button type="button" class="weekday-btn" data-day="6" onclick="toggleWeekday(this)">土</button>
+          </div>
+        </div>
+        <div class="repeat-info" id="repeat-info-text">🗓 1年分（52週）を一括登録します</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn danger" id="btn-delete" onclick="onDeleteClick()" style="display:none">削除</button>
+      <button class="btn" onclick="closeModal()">キャンセル</button>
+      <button class="btn primary" onclick="saveRes()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCOPE DIALOG -->
+<div class="scope-overlay" id="scope-overlay">
+  <div class="scope-dialog">
+    <div class="scope-title" id="scope-title">🔁 繰り返し予約の変更</div>
+    <label class="scope-option">
+      <input type="radio" name="scope" value="this" checked>
+      <div>
+        <div class="scope-option-label">この予定のみ</div>
+        <div class="scope-option-desc">選択した1件だけ変更します</div>
+      </div>
+    </label>
+    <label class="scope-option">
+      <input type="radio" name="scope" value="future">
+      <div>
+        <div class="scope-option-label">これ以降の予定をすべて</div>
+        <div class="scope-option-desc">この予定から後の全件を変更します</div>
+      </div>
+    </label>
+    <div class="scope-footer">
+      <button class="btn" onclick="closeScopeDialog()">キャンセル</button>
+      <button class="btn primary" onclick="confirmScope()">決定</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// Cloudflare Workers 通信ラッパー
+// WORKER_URLは自動設定（同一オリジンのため相対パス /api/）
+// ============================================================
+// Workers URLは相対パス（Cloudflare Pages + Workers連携）
+// ※ローカルテスト時はWorkerのURLに変更してください
+const WORKER_URL = '/api';
+
+async function gasRun(funcName, ...args) {
+  const url = `${WORKER_URL}/${funcName}`;
+  const isGet = funcName === 'getRecords' || funcName === 'getResources';
+  const options = isGet
+    ? { method: 'GET' }
+    : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(argsToPayload(funcName, args)) };
+  const res = await fetch(url, options);
+  const data = await res.json();
+  if (data && data.success === false) throw new Error(data.error || '不明なエラー');
+  return data;
+}
+
+function argsToPayload(funcName, args) {
+  if (funcName === 'addRecord')     return { record: args[0] };
+  if (funcName === 'addRecords')    return { records: args[0] };
+  if (funcName === 'updateRecord')  return { id: args[0], record: args[1] };
+  if (funcName === 'updateRecords') return { records: args[0] };
+  if (funcName === 'deleteRecords') return { ids: args[0] };
+  return {};
+}
+
+// ============================================================
+// PASSWORD（パスワードはGAS側のスクリプトプロパティで管理してもよい）
+// ============================================================
+const CORRECT_PW = '5342';
+let pwInput = '';
+document.addEventListener('keydown', e => {
+  if (document.getElementById('pw-screen').style.display !== 'none') {
+    if (/^[0-9]$/.test(e.key)) pwKey(e.key);
+    else if (e.key === 'Backspace') pwDel();
+  }
+});
+function pwKey(d) { if (pwInput.length >= 4) return; pwInput += d; updateDots(); if (pwInput.length === 4) setTimeout(checkPw, 100); }
+function pwDel() { pwInput = pwInput.slice(0,-1); updateDots(); document.getElementById('pw-error').textContent=''; }
+function updateDots() { for(let i=0;i<4;i++) document.getElementById('dot'+i).className='pw-dot'+(i<pwInput.length?' filled':''); }
+function checkPw() {
+  if (pwInput === CORRECT_PW) {
+    const s = document.getElementById('pw-screen');
+    s.style.opacity='0'; s.style.transition='opacity 0.4s';
+    setTimeout(()=>{ s.style.display='none'; }, 400);
+    initApp();
+  } else {
+    for(let i=0;i<4;i++) document.getElementById('dot'+i).className='pw-dot error';
+    document.getElementById('pw-error').textContent='パスワードが違います';
+    setTimeout(()=>{ pwInput=''; updateDots(); document.getElementById('pw-error').textContent=''; }, 1000);
+  }
+}
+
+// ============================================================
+// STATE
+// ============================================================
+const RESOURCE_COLORS = ['#4f8ef7','#7c5cfc','#3dd68c','#f5a623','#f26c6c','#2ec4b6','#e879f9','#fb923c'];
+const DEFAULT_RESOURCES = ['309号室 大テーブル','309号室 小テーブル','本社 小テーブル（黒）','本社 小テーブル（白）','社用車「C-HR」','来客用駐車場'];
+let resources = [...DEFAULT_RESOURCES];
+let allEvents = [];
+let hiddenRes = new Set();
+let mainCal, miniCal;
+let calInitialized = false;
+
+function getColor(name) { const i=resources.indexOf(name); return RESOURCE_COLORS[(i>=0?i:0)%RESOURCE_COLORS.length]; }
+function getCalResources() { return resources.map(name=>({id:name,title:name})); }
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('DOMContentLoaded', () => {
+  // カレンダーを先に初期化（非表示のまま）
+  initCalendars();
+  // パスワード画面を表示（ローディングを隠す）
+  document.getElementById('loading-overlay').style.display = 'none';
+  document.getElementById('pw-screen').style.display = 'flex';
+});
+
+function initCalendars() {
+  if (calInitialized) return;
+  calInitialized = true;
+  renderLegend();
+
+  miniCal = new FullCalendar.Calendar(document.getElementById('mini-cal'), {
+    locale:'ja', initialView:'dayGridMonth',
+    headerToolbar:{left:'prev',center:'title',right:'next'},
+    height:'auto', selectable:false, eventDisplay:'background',
+    schedulerLicenseKey:'GPL-My-Project-Is-Open-Source',
+    dateClick(info) {
+      mainCal.gotoDate(info.date); mainCal.changeView('resourceTimeGridDay');
+      setViewBtn('resourceTimeGridDay'); updateMiniCalSelected(info.date);
+    }
+  });
+  miniCal.render();
+
+  mainCal = new FullCalendar.Calendar(document.getElementById('main-cal'), {
+    locale:'ja', initialView:'resourceTimeGridDay', headerToolbar:false, height:'100%',
+    slotMinTime:'07:00:00', slotMaxTime:'22:00:00', slotDuration:'00:30:00', snapDuration:'00:15:00',
+    allDaySlot:false, nowIndicator:true, selectable:true, selectMirror:true, editable:true,
+    eventResizableFromStart:true, schedulerLicenseKey:'GPL-My-Project-Is-Open-Source',
+    resources:(fi,ok)=>ok(getCalResources()),
+    datesSet(info) { miniCal.gotoDate(info.view.currentStart); updateMiniCalSelected(info.view.currentStart); updateTitle(info.view); },
+    select(info) { openNewModal(info.startStr, info.endStr, info.resource?info.resource.id:''); },
+    eventContent(arg) {
+      const p = arg.event.extendedProps;
+      const timeText = arg.timeText || '';
+      const title = p.title || '';
+      const name = p.name ? '👤 ' + p.name : '';
+      const note = p.note ? '📝 ' + p.note : '';
+      return { html: '<div class="ev-inner">' +
+        '<div class="ev-time">' + timeText + '</div>' +
+        '<div class="ev-title">' + (p.repeat_group_id?'🔁 ':'') + (p.resource?'['+p.resource+'] ':'') + title + '</div>' +
+        (name ? '<div class="ev-name">' + name + '</div>' : '') +
+        (note ? '<div class="ev-note">' + note + '</div>' : '') +
+        '</div>' };
+    },
+    eventClick(info) { editFromProps(info.event.extendedProps); },
+    eventDrop(info) {
+      const newRes = info.newResource?info.newResource.id:info.event.extendedProps.resource;
+      handleUpdateWithScope(info.event.extendedProps, {resource:newRes, start:fcStrToJST(info.event.startStr), end:fcStrToJST(info.event.endStr)}, info.revert);
+    },
+    eventResize(info) {
+      handleUpdateWithScope(info.event.extendedProps, {start:fcStrToJST(info.event.startStr), end:fcStrToJST(info.event.endStr)}, info.revert);
+    }
+  });
+  mainCal.render();
+  updateTitle(mainCal.view);
+  updateMiniCalSelected(new Date());
+}
+
+async function initApp() {
+  showLoading('データを読み込み中...');
+  try {
+    await loadAll();
+  } finally {
+    hideLoading();
+  }
+}
+
+// ============================================================
+// LOAD
+// ============================================================
+async function loadAll() {
+  // リソース取得
+  try {
+    const res = await gasRun('getResources');
+    const names = res.records.map(r=>r.resource_name?.value).filter(Boolean);
+    if (names.length > 0) resources = names;
+    renderLegend();
+    mainCal.refetchResources();
+  } catch(e) { console.warn('リソース取得エラー:', e.message); }
+
+  // 予約取得
+  try {
+    const res = await gasRun('getRecords');
+    allEvents = res.records.map(r => {
+      const resource = r.resource?.value||'';
+      const color = getColor(resource);
+      const startVal = r.start_datetime?.value||'';
+      const endVal = r.end_datetime?.value||'';
+      const groupId = r.repeat_group_id?.value||'';
+      const rule = r.repeat_rule?.value||'';
+      const idx = parseInt(r.repeat_index?.value||'0')||0;
+      return {
+        id: r['$id'].value,
+        title: (groupId?'🔁 ':'')+`[${resource}] ${r.title?.value||''}`,
+        start: startVal, end: endVal,
+        backgroundColor: color+'cc', borderColor: color,
+        resourceId: resource,
+        extendedProps: {
+          id:r['$id'].value, title:r.title?.value||'', resource,
+          start:startVal, end:endVal,
+          name:r.name?.value||'', contact:r.contact?.value||'', note:r.note?.value||'',
+          repeat_group_id:groupId, repeat_rule:rule, repeat_index:idx
+        }
+      };
+    });
+    renderEvents();
+    renderUpcoming();
+  } catch(e) { showToast('データ取得エラー: '+e.message,'error'); }
+}
+
+function renderLegend() {
+  document.getElementById('resource-legend').innerHTML = resources.map((name,i)=>{
+    const c=RESOURCE_COLORS[i%RESOURCE_COLORS.length];
+    return `<div class="legend-item ${!hiddenRes.has(name)?'active':''}" style="--dot-color:${c}" onclick="toggleRes(this,'${name.replace(/'/g,"\\'")}')"><div class="legend-dot"></div>${name}</div>`;
+  }).join('');
+  document.getElementById('f-resource').innerHTML = resources.map(r=>`<option value="${r}">${r}</option>`).join('');
+}
+function toggleRes(el,name) {
+  hiddenRes.has(name)?hiddenRes.delete(name):hiddenRes.add(name);
+  el.classList.toggle('active',!hiddenRes.has(name));
+  renderEvents();
+}
+function renderEvents() {
+  mainCal.getEventSources().forEach(s=>s.remove());
+  miniCal.getEventSources().forEach(s=>s.remove());
+  const filtered = allEvents.filter(ev=>!hiddenRes.has(ev.extendedProps?.resource));
+  mainCal.addEventSource(filtered);
+  miniCal.addEventSource(filtered);
+}
+function renderUpcoming() {
+  const now=new Date();
+  const items=allEvents.filter(ev=>new Date(ev.end||ev.extendedProps?.end)>now).sort((a,b)=>new Date(a.start)-new Date(b.start)).slice(0,8);
+  const el=document.getElementById('upcoming-list');
+  if (!items.length){el.innerHTML='<div style="font-size:12px;color:var(--text-muted)">予約なし</div>';return;}
+  el.innerHTML=items.map(ev=>{
+    const p=ev.extendedProps;
+    const s=new Date(ev.start),e=new Date(ev.end||p.end);
+    const dt=`${s.getMonth()+1}/${s.getDate()} ${Z(s.getHours())}:${Z(s.getMinutes())}〜${Z(e.getHours())}:${Z(e.getMinutes())}`;
+    const badge=p.repeat_group_id?'<span class="repeat-badge">🔁</span>':'';
+    return `<div class="upcoming-item" style="--item-color:${ev.borderColor}" onclick='editFromProps(${JSON.stringify(p)})'>
+      <div class="upcoming-title">${p.title||''}${badge}</div>
+      <div class="upcoming-meta">${p.resource} ／ ${dt}</div>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// DATE UTILS
+// ============================================================
+function Z(n){return String(n).padStart(2,'0');}
+function isoToLocal(iso){if(!iso)return'';const d=new Date(iso);return`${d.getFullYear()}-${Z(d.getMonth()+1)}-${Z(d.getDate())}T${Z(d.getHours())}:${Z(d.getMinutes())}`;}
+function toJST(s){if(!s)return'';return s.substring(0,16)+':00+09:00';}
+function fcStrToJST(s){if(!s)return'';const d=new Date(s);return`${d.getFullYear()}-${Z(d.getMonth()+1)}-${Z(d.getDate())}T${Z(d.getHours())}:${Z(d.getMinutes())}:${Z(d.getSeconds())}+09:00`;}
+function toKintoneRecord(data){
+  const s=(data.start||'').includes('+')?data.start:toJST(data.start||'');
+  const e=(data.end||'').includes('+')?data.end:toJST(data.end||'');
+  return{title:{value:data.title||''},resource:{value:data.resource||''},start_datetime:{value:s},end_datetime:{value:e},name:{value:data.name||''},contact:{value:data.contact||''},note:{value:data.note||''},repeat_group_id:{value:data.repeat_group_id||''},repeat_rule:{value:data.repeat_rule||''},repeat_index:{value:String(data.repeat_index||0)}};
+}
+
+// ============================================================
+// CALENDAR UTILS
+// ============================================================
+function updateMiniCalSelected(date){
+  setTimeout(()=>{
+    const el=document.getElementById('mini-cal');
+    el.querySelectorAll('.mini-selected').forEach(e=>e.classList.remove('mini-selected'));
+    const ds=`${date.getFullYear()}-${Z(date.getMonth()+1)}-${Z(date.getDate())}`;
+    const cell=el.querySelector(`[data-date="${ds}"]`);
+    if(cell)cell.classList.add('mini-selected');
+  },50);
+}
+function updateTitle(view){
+  const el=document.getElementById('toolbar-title'),days=['日','月','火','水','木','金','土'];
+  if(view.type.includes('Day')){const d=view.currentStart;el.textContent=`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 (${days[d.getDay()]})`;}
+  else if(view.type.includes('Week')){const s=view.currentStart,e=new Date(view.currentEnd);e.setDate(e.getDate()-1);el.textContent=`${s.getMonth()+1}月${s.getDate()}日 〜 ${e.getMonth()+1}月${e.getDate()}日`;}
+  else{const d=view.currentStart;el.textContent=`${d.getFullYear()}年${d.getMonth()+1}月`;}
+}
+function changeView(v){mainCal.changeView(v);setViewBtn(v);}
+function setViewBtn(v){
+  document.getElementById('btn-day').classList.toggle('active',v.includes('Day'));
+  document.getElementById('btn-week').classList.toggle('active',v.includes('Week'));
+  document.getElementById('btn-month').classList.toggle('active',v.includes('Month'));
+}
+
+// ============================================================
+// MODAL
+// ============================================================
+function openNewModal(start,end,resourceId){
+  document.getElementById('modal-title').textContent='新規予約';
+  document.getElementById('edit-id').value='';
+  document.getElementById('edit-repeat-group-id').value='';
+  document.getElementById('edit-repeat-index').value='';
+  document.getElementById('btn-delete').style.display='none';
+  document.getElementById('f-title').value='';
+  document.getElementById('f-resource').value=resourceId||(resources[0]||'');
+  document.getElementById('f-start').value=start?isoToLocal(start):isoToLocal(new Date().toISOString());
+  document.getElementById('f-end').value=end?isoToLocal(end):'';
+  document.getElementById('f-name').value='';
+  document.getElementById('f-contact').value='';
+  document.getElementById('f-note').value='';
+  document.getElementById('repeat-enabled').checked=false;
+  document.getElementById('repeat-options').style.display='none';
+  document.getElementById('repeat-section').style.display='block';
+  document.getElementById('repeat-freq').value='weekly';
+  document.querySelectorAll('.weekday-btn').forEach(b=>b.classList.remove('on'));
+  onFreqChange();
+  if(start){const dayIdx=new Date(start).getDay();const btn=document.querySelector(`.weekday-btn[data-day="${dayIdx}"]`);if(btn)btn.classList.add('on');}
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function openAlldayModal(){const t=mainCal.getDate(),y=t.getFullYear(),m=Z(t.getMonth()+1),d=Z(t.getDate());openNewModal(`${y}-${m}-${d}T07:00`,`${y}-${m}-${d}T22:00`,'');}
+function editFromProps(p){
+  document.getElementById('modal-title').textContent=p.repeat_group_id?'繰り返し予約の編集 🔁':'予約の編集';
+  document.getElementById('edit-id').value=p.id||'';
+  document.getElementById('edit-repeat-group-id').value=p.repeat_group_id||'';
+  document.getElementById('edit-repeat-index').value=p.repeat_index!=null?String(p.repeat_index):'0';
+  document.getElementById('btn-delete').style.display='inline-block';
+  document.getElementById('f-title').value=p.title||'';
+  document.getElementById('f-resource').value=p.resource||'';
+  document.getElementById('f-start').value=isoToLocal(p.start);
+  document.getElementById('f-end').value=isoToLocal(p.end);
+  document.getElementById('f-name').value=p.name||'';
+  document.getElementById('f-contact').value=p.contact||'';
+  document.getElementById('f-note').value=p.note||'';
+  document.getElementById('repeat-section').style.display='none';
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal(){document.getElementById('modal-overlay').classList.remove('open');mainCal.unselect();}
+document.getElementById('modal-overlay').addEventListener('click',function(e){if(e.target===this)closeModal();});
+
+// ============================================================
+// REPEAT
+// ============================================================
+function onRepeatToggle(){const on=document.getElementById('repeat-enabled').checked;document.getElementById('repeat-options').style.display=on?'flex':'none';if(on)onFreqChange();}
+function onFreqChange(){const freq=document.getElementById('repeat-freq').value;document.getElementById('weekday-row').style.display=freq==='weekly'?'flex':'none';document.getElementById('repeat-info-text').textContent=freq==='weekly'?'🗓 1年分（52週）を一括登録します':'🗓 1年分（12ヶ月）を一括登録します';}
+function toggleWeekday(btn){btn.classList.toggle('on');}
+function getSelectedWeekdays(){return[...document.querySelectorAll('.weekday-btn.on')].map(b=>parseInt(b.dataset.day));}
+function generateRepeatDates(startLocal,endLocal,freq,weekdays){
+  const baseStart=new Date(startLocal),baseEnd=new Date(endLocal),durMs=baseEnd-baseStart,results=[];
+  if(freq==='weekly'){
+    if(!weekdays.length)return[];
+    const limit=new Date(baseStart);limit.setFullYear(limit.getFullYear()+1);
+    const ws=new Date(baseStart);ws.setDate(ws.getDate()-ws.getDay());ws.setHours(0,0,0,0);
+    while(ws<=limit){
+      for(const day of [...weekdays].sort((a,b)=>a-b)){
+        const d=new Date(ws);d.setDate(ws.getDate()+day);d.setHours(baseStart.getHours(),baseStart.getMinutes(),0,0);
+        if(d<baseStart||d>limit)continue;
+        const ed=new Date(d.getTime()+durMs);
+        results.push({start:`${d.getFullYear()}-${Z(d.getMonth()+1)}-${Z(d.getDate())}T${Z(d.getHours())}:${Z(d.getMinutes())}:00+09:00`,end:`${ed.getFullYear()}-${Z(ed.getMonth()+1)}-${Z(ed.getDate())}T${Z(ed.getHours())}:${Z(ed.getMinutes())}:00+09:00`});
+      }
+      ws.setDate(ws.getDate()+7);
+    }
+  }else{
+    for(let i=0;i<12;i++){
+      const d=new Date(baseStart);d.setMonth(d.getMonth()+i);if(d.getDate()!==baseStart.getDate())d.setDate(0);
+      const ed=new Date(d.getTime()+durMs);
+      results.push({start:`${d.getFullYear()}-${Z(d.getMonth()+1)}-${Z(d.getDate())}T${Z(d.getHours())}:${Z(d.getMinutes())}:00+09:00`,end:`${ed.getFullYear()}-${Z(ed.getMonth()+1)}-${Z(ed.getDate())}T${Z(ed.getHours())}:${Z(ed.getMinutes())}:00+09:00`});
+    }
+  }
+  return results;
+}
+
+// ============================================================
+// SCOPE DIALOG
+// ============================================================
+let _scopeAction=null;
+function openScopeDialog(title,action){_scopeAction=action;document.getElementById('scope-title').textContent=title;document.querySelector('input[name="scope"][value="this"]').checked=true;document.getElementById('scope-overlay').classList.add('open');}
+function closeScopeDialog(){document.getElementById('scope-overlay').classList.remove('open');if(_scopeAction?.revertFn)_scopeAction.revertFn();_scopeAction=null;}
+document.getElementById('scope-overlay').addEventListener('click',function(e){if(e.target===this)closeScopeDialog();});
+async function confirmScope(){
+  const scope=document.querySelector('input[name="scope"]:checked').value;
+  document.getElementById('scope-overlay').classList.remove('open');
+  if(!_scopeAction)return;
+  const{type,props,patch,revertFn}=_scopeAction;_scopeAction=null;
+  if(type==='delete')await execDelete(props,scope);
+  else if(type==='update')await execUpdate(props,patch,scope,revertFn);
+}
+
+// ============================================================
+// SAVE
+// ============================================================
+async function saveRes(){
+  const data={
+    title:document.getElementById('f-title').value.trim(),
+    resource:document.getElementById('f-resource').value,
+    start:document.getElementById('f-start').value,
+    end:document.getElementById('f-end').value,
+    name:document.getElementById('f-name').value.trim(),
+    contact:document.getElementById('f-contact').value.trim(),
+    note:document.getElementById('f-note').value.trim(),
+  };
+  if(!data.title||!data.resource||!data.start||!data.end||!data.name){showToast('必須項目を入力してください','error');return;}
+  if(new Date(data.start)>=new Date(data.end)){showToast('終了日時は開始日時より後にしてください','error');return;}
+  const id=document.getElementById('edit-id').value;
+  const groupId=document.getElementById('edit-repeat-group-id').value;
+  const repeatIdx=parseInt(document.getElementById('edit-repeat-index').value)||0;
+  if(id){
+    if(groupId){
+      const props={id,repeat_group_id:groupId,repeat_index:repeatIdx,...allEvents.find(ev=>String(ev.extendedProps.id)===String(id))?.extendedProps};
+      closeModal();openScopeDialog('🔁 繰り返し予約の変更',{type:'update',props,patch:data});return;
+    }
+    if(!checkConflict(data,id))return;
+    showLoading('更新中...');
+    try{await gasRun('updateRecord',id,toKintoneRecord({...data,repeat_group_id:'',repeat_rule:'',repeat_index:0}));await loadAll();closeModal();showToast('予約を更新しました ✓','success');}
+    catch(e){showToast('エラー: '+e.message,'error');}finally{hideLoading();}
+    return;
+  }
+  const repeatEnabled=document.getElementById('repeat-enabled').checked;
+  if(repeatEnabled){await saveRepeatEvents(data);}
+  else{
+    if(!checkConflict(data,null))return;
+    showLoading('登録中...');
+    try{await gasRun('addRecord',toKintoneRecord({...data,repeat_group_id:'',repeat_rule:'',repeat_index:0}));await loadAll();closeModal();showToast('予約を登録しました ✓','success');}
+    catch(e){showToast('エラー: '+e.message,'error');}finally{hideLoading();}
+  }
+}
+function checkConflict(data,excludeId){
+  const conflict=allEvents.find(ev=>{
+    if(ev.extendedProps.resource!==data.resource)return false;
+    if(excludeId&&String(ev.extendedProps.id)===String(excludeId))return false;
+    return new Date(data.start)<new Date(ev.end||ev.extendedProps.end)&&new Date(data.end)>new Date(ev.start);
+  });
+  if(conflict){const cs=new Date(conflict.start),ce=new Date(conflict.end||conflict.extendedProps.end);showToast(`⚠ 「${conflict.extendedProps.title}」と重複（${Z(cs.getHours())}:${Z(cs.getMinutes())}〜${Z(ce.getHours())}:${Z(ce.getMinutes())}）`,'error');return false;}
+  return true;
+}
+async function saveRepeatEvents(data){
+  const freq=document.getElementById('repeat-freq').value;
+  const weekdays=getSelectedWeekdays();
+  if(freq==='weekly'&&!weekdays.length){showToast('曜日を1つ以上選択してください','error');return;}
+  const dates=generateRepeatDates(data.start,data.end,freq,weekdays);
+  if(!dates.length){showToast('繰り返し日程を生成できませんでした','error');return;}
+  const groupId='rg_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+  const ruleStr=freq==='weekly'?`weekly:${weekdays.join(',')}`:'monthly';
+  showLoading(`🔁 ${dates.length}件を登録中...`);
+  try{
+    const records=dates.map((d,i)=>toKintoneRecord({...data,...d,repeat_group_id:groupId,repeat_rule:ruleStr,repeat_index:i}));
+    await gasRun('addRecords',records);
+    await loadAll();closeModal();showToast(`🔁 ${dates.length}件の繰り返し予約を登録しました ✓`,'success');
+  }catch(e){showToast('登録エラー: '+e.message,'error');}finally{hideLoading();}
+}
+
+// ============================================================
+// DELETE
+// ============================================================
+function onDeleteClick(){
+  const groupId=document.getElementById('edit-repeat-group-id').value;
+  if(groupId){
+    const props={id:document.getElementById('edit-id').value,repeat_group_id:groupId,repeat_index:parseInt(document.getElementById('edit-repeat-index').value)||0};
+    closeModal();openScopeDialog('🔁 繰り返し予約の削除',{type:'delete',props});
+  }else{
+    const id=document.getElementById('edit-id').value;
+    if(!id||!confirm('この予約を削除しますか？'))return;
+    showLoading('削除中...');
+    gasRun('deleteRecords',[id]).then(()=>{loadAll();closeModal();showToast('予約を削除しました','success');}).catch(e=>showToast('削除エラー: '+e.message,'error')).finally(hideLoading);
+  }
+}
+async function execDelete(props,scope){
+  const groupEvents=allEvents.filter(ev=>ev.extendedProps.repeat_group_id===props.repeat_group_id);
+  const targets=scope==='this'?groupEvents.filter(ev=>String(ev.extendedProps.id)===String(props.id)):groupEvents.filter(ev=>ev.extendedProps.repeat_index>=props.repeat_index);
+  const ids=targets.map(ev=>String(ev.extendedProps.id));
+  showLoading(`${ids.length}件を削除中...`);
+  try{await gasRun('deleteRecords',ids);await loadAll();showToast(`${ids.length}件を削除しました`,'success');}
+  catch(e){showToast('削除エラー: '+e.message,'error');}finally{hideLoading();}
+}
+
+// ============================================================
+// UPDATE
+// ============================================================
+function handleUpdateWithScope(props,patch,revertFn){
+  if(props.repeat_group_id)openScopeDialog('🔁 繰り返し予約の変更',{type:'update',props,patch,revertFn});
+  else execUpdate(props,patch,'this',revertFn);
+}
+async function execUpdate(props,patch,scope,revertFn){
+  const mergedResource=patch.resource||props.resource;
+  const groupEvents=props.repeat_group_id?allEvents.filter(ev=>ev.extendedProps.repeat_group_id===props.repeat_group_id):[];
+  let targets;
+  if(scope==='this'||!props.repeat_group_id){
+    targets=[{...props,...patch,resource:mergedResource}];
+  }else{
+    const pS=new Date(patch.start||props.start),pE=new Date(patch.end||props.end),durMs=pE-pS;
+    targets=groupEvents.filter(ev=>ev.extendedProps.repeat_index>=props.repeat_index).map(ev=>{
+      const od=new Date(ev.extendedProps.start);od.setHours(pS.getHours(),pS.getMinutes(),0,0);
+      const oe=new Date(od.getTime()+durMs);
+      return{...ev.extendedProps,...patch,id:ev.extendedProps.id,resource:mergedResource,
+        start:`${od.getFullYear()}-${Z(od.getMonth()+1)}-${Z(od.getDate())}T${Z(od.getHours())}:${Z(od.getMinutes())}:00+09:00`,
+        end:`${oe.getFullYear()}-${Z(oe.getMonth()+1)}-${Z(oe.getDate())}T${Z(oe.getHours())}:${Z(oe.getMinutes())}:00+09:00`};
+    });
+  }
+  showLoading(`${targets.length}件を更新中...`);
+  try{
+    const records=targets.map(t=>({id:String(t.id),record:toKintoneRecord(t)}));
+    await gasRun('updateRecords',records);
+    await loadAll();showToast(`${targets.length}件を更新しました ✓`,'success');
+  }catch(e){showToast('更新エラー: '+e.message,'error');if(typeof revertFn==='function')revertFn();}
+  finally{hideLoading();}
+}
+
+// ============================================================
+// LOADING / TOAST
+// ============================================================
+function showLoading(msg='処理中...'){const el=document.getElementById('loading-overlay');document.getElementById('loading-text').textContent=msg;el.style.display='flex';}
+function hideLoading(){document.getElementById('loading-overlay').style.display='none';}
+let toastTmr;
+function showToast(msg,type=''){const el=document.getElementById('toast');el.textContent=msg;el.className='toast show '+type;clearTimeout(toastTmr);toastTmr=setTimeout(()=>el.classList.remove('show'),4000);}
+</script>
+</body>
+</html>
