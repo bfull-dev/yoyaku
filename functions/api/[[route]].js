@@ -54,8 +54,27 @@ async function kintoneRequest(method, path, payload, token, env) {
 }
 
 async function getRecords(env) {
-  const data = await kintoneRequest('GET', `records.json?app=${env.KINTONE_APP_ID}&query=order+by+%24id+asc+limit+500`, null, env.KINTONE_TOKEN, env);
-  return { success: true, records: data.records };
+  // 直近1ヶ月より前の予約はカレンダーに不要なため、基準日（今日の1ヶ月前）以降のみ取得する。
+  // さらに、繰り返し予約で件数が膨らんでも1回の取得上限(500件)で新しい予約が
+  // 切り捨てられないよう、offsetページネーションで全ページを取得する。
+  const cutoff = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000)
+    .toISOString().slice(0, 19) + 'Z'; // 例: 2026-06-23T00:00:00Z
+  const pageSize = 500;
+  const all = [];
+  let offset = 0;
+  while (true) {
+    const query = `end_datetime >= "${cutoff}" order by $id asc limit ${pageSize} offset ${offset}`;
+    const data = await kintoneRequest(
+      'GET',
+      `records.json?app=${env.KINTONE_APP_ID}&query=${encodeURIComponent(query)}`,
+      null, env.KINTONE_TOKEN, env
+    );
+    all.push(...data.records);
+    // 取得件数がページサイズ未満なら最終ページ。offset上限(10000)も安全のため打ち止め。
+    if (data.records.length < pageSize || offset + pageSize >= 10000) break;
+    offset += pageSize;
+  }
+  return { success: true, records: all };
 }
 
 async function getResources(env) {
